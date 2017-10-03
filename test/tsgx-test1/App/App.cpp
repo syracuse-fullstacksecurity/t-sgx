@@ -14,14 +14,26 @@
 #include <sys/time.h>
 #include "resort.h"
 
-#define SIZE 100
+#define MAX 100
+#define MIN 0
 
 void ocall_getTime(double ret[2]){
     struct timeval stamp;
     gettimeofday(&stamp,NULL);//time starti
     ret[0] = stamp.tv_sec;
     ret[1] = stamp.tv_usec;
+   	
+}
 
+
+void  generateNum(int *list, long count){
+    
+    srand(time(NULL));
+    
+    for(long i=0; i<count; i++){
+        list[i] = rand() % 100;
+    }
+    
 }
 
 
@@ -47,23 +59,28 @@ void task_1(char *list, int *order, int size){
 }
 
 int Lab1(){
+    printf("\n-------Lab 1: Task 1-------\n");
 
     int length = 0;
     printf(" Enter the Length of letters: \n");
     scanf("%d",&length);
     
-    char* list = new char[length];
-    int* order = new int[length];
+    char* list = new char[length];//char list[length] = {"0"};
+    int* order = new int[length];//int  order[length] = {0};
+
     printf(" Enter %d letters: \n", length);
     for(int i=0; i<length; i++){
+       //list[i] = getchar();
         scanf("%s",&list[i]);
     }
-   
+
     printf(" Enter the order of every letter: \n");
     for(int i=0; i<length; i++){
         scanf("%d",&order[i]);
     }
     
+    //int *list = new int[num];
+    //generateNum(list, num);
     task_1(list,order,length);
     // ----Lab 1 End-----
     delete[] list;
