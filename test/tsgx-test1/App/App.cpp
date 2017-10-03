@@ -1,3 +1,35 @@
+/*
+ * Copyright (C) 2011-2016 Intel Corporation. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *   * Redistributions of source code must retain the above copyright
+ *     notice, this list of conditions and the following disclaimer.
+ *   * Redistributions in binary form must reproduce the above copyright
+ *     notice, this list of conditions and the following disclaimer in
+ *     the documentation and/or other materials provided with the
+ *     distribution.
+ *   * Neither the name of Intel Corporation nor the names of its
+ *     contributors may be used to endorse or promote products derived
+ *     from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+ * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+ * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+ * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ */
+
+
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
@@ -7,90 +39,55 @@
 # define MAX_PATH FILENAME_MAX
 
 #include "sgx_urts.h"
-//#include "sgx_status.h"
 #include "App.h"
 #include "Enclave_u.h"
-#include <time.h>
-#include <sys/time.h>
 #include "resort.h"
 
-#define MAX 100
-#define MIN 0
+/* Global EID shared by multiple threads */
+sgx_enclave_id_t global_eid = 0;
 
-void ocall_getTime(double ret[2]){
-    struct timeval stamp;
-    gettimeofday(&stamp,NULL);//time starti
-    ret[0] = stamp.tv_sec;
-    ret[1] = stamp.tv_usec;
-   	
-}
+int task(){
 
-
-void  generateNum(int *list, long count){
+    int length = 0;
+    printf(" Enter the Length of letters: \n");
+    scanf("%d",&length);
     
-    srand(time(NULL));
-    
-    for(long i=0; i<count; i++){
-        list[i] = rand() % 100;
+    char* list = new char[length];
+    int* order = new int[length];
+    printf(" Enter %d letters: \n", length);
+    for(int i=0; i<length; i++){
+        scanf("%s",&list[i]);
     }
-    
-}
-
-
-void task_1(char *list, int *order, int size){
+   
+    printf(" Enter the order of every letter: \n");
+    for(int i=0; i<length; i++){
+        scanf("%d",&order[i]);
+    }
+   
     sgx_status_t ret = SGX_ERROR_UNEXPECTED;
     int retval;
     
     assert(list != NULL);
     assert(order != NULL);
 
-    printf("\n Task 1.2: Resort letters outside enclave:\n");
-    resort(list,order,size);
+    printf("\n Task 1: Resort letters outside enclave:\n");
+    resort(list,order,length);
 
-    printf("\n Task 1.1: Resort letters inside enclave:\n");
-    ret = ecall_resort(global_eid, &retval,list,order,size);
+    printf("\n Task 2: Resort letters inside enclave:\n");
+    ret = ecall_resort(global_eid, &retval,list,order,length);
 
-    printf("\n Task 1.3 [Bonus]: Resort letters inside enclave (with array also inside enclave!):\n");
-    ret = ecall_resort_ncp(global_eid, &retval,(long)list,(long)order,size);
+    printf("\n Task 3 [Bonus]: Resort letters inside enclave (with array also inside enclave!):\n");
+    ret = ecall_resort_ncp(global_eid, &retval,(long)list,(long)order,length);
 
     if(ret != SGX_SUCCESS)
-        abort();
-
-}
-
-int Lab1(){
-    printf("\n-------Lab 1: Task 1-------\n");
-
-    int length = 0;
-    printf(" Enter the Length of letters: \n");
-    scanf("%d",&length);
+        abort(); 
     
-    char* list = new char[length];//char list[length] = {"0"};
-    int* order = new int[length];//int  order[length] = {0};
-
-    printf(" Enter %d letters: \n", length);
-    for(int i=0; i<length; i++){
-       //list[i] = getchar();
-        scanf("%s",&list[i]);
-    }
-
-    printf(" Enter the order of every letter: \n");
-    for(int i=0; i<length; i++){
-        scanf("%d",&order[i]);
-    }
-    
-    //int *list = new int[num];
-    //generateNum(list, num);
-    task_1(list,order,length);
-    // ----Lab 1 End-----
+    // ----Task End-----
     delete[] list;
     delete[] order;
     return 0;
 }
 
-
-/* Global EID shared by multiple threads */
-sgx_enclave_id_t global_eid = 0;
 
 typedef struct _sgx_errlist_t {
     sgx_status_t err;
@@ -191,13 +188,13 @@ void print_error_message(sgx_status_t ret)
             break;
         }
     }
-    
+
     if (idx == ttl)
         printf("Error: Unexpected error occurred.\n");
 }
 
 /* Initialize the enclave:
- *   Step 1: retrive the launch token saved by last transaction
+ *   Step 1: try to retrieve the launch token saved by last transaction
  *   Step 2: call sgx_create_enclave to initialize an enclave instance
  *   Step 3: save the launch token if it is updated
  */
@@ -207,14 +204,14 @@ int initialize_enclave(void)
     sgx_launch_token_t token = {0};
     sgx_status_t ret = SGX_ERROR_UNEXPECTED;
     int updated = 0;
-    
-    /* Step 1: retrive the launch token saved by last transaction */
 
-/* __GNUC__ */
+    /* Step 1: try to retrieve the launch token saved by last transaction
+     *         if there is no token, then create a new one.
+     */
     /* try to get the token saved in $HOME */
     const char *home_dir = getpwuid(getuid())->pw_dir;
-    
-    if (home_dir != NULL && 
+
+    if (home_dir != NULL &&
         (strlen(home_dir)+strlen("/")+sizeof(TOKEN_FILENAME)+1) <= MAX_PATH) {
         /* compose the token path */
         strncpy(token_path, home_dir, strlen(home_dir));
@@ -239,7 +236,6 @@ int initialize_enclave(void)
             printf("Warning: Invalid launch token read from \"%s\".\n", token_path);
         }
     }
-
     /* Step 2: call sgx_create_enclave to initialize an enclave instance */
     /* Debug Support: set 2nd parameter to 1 */
     ret = sgx_create_enclave(ENCLAVE_FILENAME, SGX_DEBUG_FLAG, &token, &updated, &global_eid, NULL);
@@ -250,7 +246,6 @@ int initialize_enclave(void)
     }
 
     /* Step 3: save the launch token if it is updated */
-/* __GNUC__ */
     if (updated == FALSE || fp == NULL) {
         /* if the token is not updated, or file handler is invalid, do not perform saving */
         if (fp != NULL) fclose(fp);
@@ -279,23 +274,28 @@ void ocall_print(const char *str, int ret[1])
 /* Application entry */
 int SGX_CDECL main(int argc, char *argv[])
 {
-    int i = 3;
-    int j = 5;
-    printf("Initializing enclave ... \n");
+    (void)(argc);
+    (void)(argv);
+
+
     /* Initialize the enclave */
-    if(initialize_enclave() < 0){printf("Error enclave and exit\n");return -1;}
- 
-    /* Utilize edger8r attributes */
-    edger8r_function_attributes();
-    
-    /* Utilize trusted libraries */
-    
-    printf("Enclave is initialized\n");
-    Lab1();
-    
+    if(initialize_enclave() < 0){
+        printf("Enter a character before exit ...\n");
+        getchar();
+        return -1;
+    }
+
+    // t-sgx init
+    tsgx_init(global_eid);
+
+    /* Run test enclave */
+    task();
+
     /* Destroy the enclave */
     sgx_destroy_enclave(global_eid);
+
     printf("Info: SampleEnclave successfully returned.\n");
+
     return 0;
 }
 

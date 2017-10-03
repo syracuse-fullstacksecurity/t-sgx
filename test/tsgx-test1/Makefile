@@ -1,20 +1,49 @@
+#
+# Copyright (C) 2011-2016 Intel Corporation. All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+#
+#   * Redistributions of source code must retain the above copyright
+#     notice, this list of conditions and the following disclaimer.
+#   * Redistributions in binary form must reproduce the above copyright
+#     notice, this list of conditions and the following disclaimer in
+#     the documentation and/or other materials provided with the
+#     distribution.
+#   * Neither the name of Intel Corporation nor the names of its
+#     contributors may be used to endorse or promote products derived
+#     from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+# A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+# OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+# DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+# THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+#
+
 ######## SGX SDK Settings ########
 
 SGX_SDK ?= /opt/intel/sgxsdk
-# SGX_MODE ?= SIM
-
-#clang-3.4
-
-CC = g++
-
 SGX_MODE ?= HW
-# SGX_PRELEASE ?= 1
-SGX_DEBUG ?= 0
-
-ifneq ($(SGX_DEBUG), 1) 
-	SGX_PRERELEASE ?= 1
-endif
 SGX_ARCH ?= x64
+SGX_PRERELEASE ?= 1
+
+LLVM_PATH = ../../build-llvm/bin
+OPT = $(LLVM_PATH)/opt
+LLC = $(LLVM_PATH)/llc
+CLANG = $(LLVM_PATH)/clang
+FUN_WRAP_PASS_PATH = ../../function-wrapper-pass/build/function-wrapper
+FUN_WRAP_PASS_SO = $(FUN_WRAP_PASS_PATH)/libFunctionWrapperPass.so
+FUN_NAME_PASS_PATH = ../../function-name-pass/build/function-name
+FUN_NAME_PASS_SO = $(FUN_NAME_PASS_PATH)/libFunctionNamePass.so
 
 ifeq ($(shell getconf LONG_BIT), 32)
 	SGX_ARCH := x86
@@ -43,7 +72,7 @@ endif
 ifeq ($(SGX_DEBUG), 1)
         SGX_COMMON_CFLAGS += -O0 -g
 else
-        SGX_COMMON_CFLAGS += -O2
+        SGX_COMMON_CFLAGS += -O0
 endif
 
 ######## App Settings ########
@@ -54,7 +83,7 @@ else
 	Urts_Library_Name := sgx_urts
 endif
 
-App_Cpp_Files := App/App.cpp $(wildcard App/Edger8rSyntax/*.cpp)
+App_Cpp_Files := App/App.cpp
 App_Include_Paths := -IInclude -IApp -I$(SGX_SDK)/include
 
 App_C_Flags := $(SGX_COMMON_CFLAGS) -fPIC -Wno-attributes $(App_Include_Paths)
@@ -89,18 +118,26 @@ App_Name := app
 ifneq ($(SGX_MODE), HW)
 	Trts_Library_Name := sgx_trts_sim
 	Service_Library_Name := sgx_tservice_sim
-	Crypto_Library_Name := sgx_tcrypto
 else
 	Trts_Library_Name := sgx_trts
 	Service_Library_Name := sgx_tservice
-	Crypto_Library_Name := sgx_tcrypto
 endif
+Crypto_Library_Name := sgx_tcrypto
 
-Enclave_Cpp_Files := Enclave/Enclave.cpp $(wildcard Enclave/Edger8rSyntax/*.cpp) $(wildcard Enclave/TrustedLibrary/*.cpp)
+Enclave_C_Files := Enclave/Enclave.c
 Enclave_Include_Paths := -IInclude -IEnclave -I$(SGX_SDK)/include -I$(SGX_SDK)/include/tlibc -I$(SGX_SDK)/include/stlport
 
 Enclave_C_Flags := $(SGX_COMMON_CFLAGS) -nostdinc -fvisibility=hidden -fpie -fstack-protector $(Enclave_Include_Paths)
+Enclave_Clang_Flags := $(SGX_COMMON_CFLAGS) -nostdinc -fpie $(Enclave_Include_Paths) -emit-llvm
 Enclave_Cpp_Flags := $(Enclave_C_Flags) -std=c++03 -nostdinc++
+
+# To generate a proper enclave, it is recommended to follow below guideline to link the trusted libraries:
+#    1. Link sgx_trts with the `--whole-archive' and `--no-whole-archive' options,
+#       so that the whole content of trts is included in the enclave.
+#    2. For other libraries, you just need to pull the required symbols.
+#       Use `--start-group' and `--end-group' to link these libraries.
+# Do NOT move the libraries linked with `--start-group' and `--end-group' within `--whole-archive' and `--no-whole-archive' options.
+# Otherwise, you may get some undesirable errors.
 Enclave_Link_Flags := $(SGX_COMMON_CFLAGS) -Wl,--no-undefined -nostdlib -nodefaultlibs -nostartfiles -L$(SGX_LIBRARY_PATH) \
 	-Wl,--whole-archive -l$(Trts_Library_Name) -Wl,--no-whole-archive \
 	-Wl,--start-group -lsgx_tstdc -lsgx_tstdcxx -l$(Crypto_Library_Name) -l$(Service_Library_Name) -Wl,--end-group \
@@ -109,7 +146,7 @@ Enclave_Link_Flags := $(SGX_COMMON_CFLAGS) -Wl,--no-undefined -nostdlib -nodefau
 	-Wl,--defsym,__ImageBase=0 \
 	-Wl,--version-script=Enclave/Enclave.lds
 
-Enclave_Cpp_Objects := $(Enclave_Cpp_Files:.cpp=.o)
+Enclave_C_Objects := $(Enclave_C_Files:.c=.o)
 
 Enclave_Name := enclave.so
 Signed_Enclave_Name := enclave.signed.so
@@ -132,7 +169,7 @@ all: $(App_Name) $(Enclave_Name)
 	@echo "Please sign the $(Enclave_Name) first with your signing key before you run the $(App_Name) to launch and access the enclave."
 	@echo "To sign the enclave use the command:"
 	@echo "   $(SGX_ENCLAVE_SIGNER) sign -key <your key> -enclave $(Enclave_Name) -out <$(Signed_Enclave_Name)> -config $(Enclave_Config_File)"
-	@echo "You can also sign the enclave using an external signing tool. See User's Guide for more details."
+	@echo "You can also sign the enclave using an external signing tool."
 	@echo "To build the project in simulation mode set SGX_MODE=SIM. To build the project in prerelease mode set SGX_PRERELEASE=1 and SGX_MODE=HW."
 else
 all: $(App_Name) $(Signed_Enclave_Name)
@@ -145,6 +182,7 @@ ifneq ($(Build_Mode), HW_RELEASE)
 endif
 
 ######## App Objects ########
+
 App/Enclave_u.c: $(SGX_EDGER8R) Enclave/Enclave.edl
 	@cd App && $(SGX_EDGER8R) --untrusted ../Enclave/Enclave.edl --search-path ../Enclave --search-path $(SGX_SDK)/include
 	@echo "GEN  =>  $@"
@@ -154,12 +192,13 @@ App/Enclave_u.o: App/Enclave_u.c
 	@echo "CC   <=  $<"
 
 App/%.o: App/%.cpp
-	@$(CXX) $(App_Cpp_Flags) -g -c $< -o $@
+	@$(CXX) $(App_Cpp_Flags) -c $< -o $@
 	@echo "CXX  <=  $<"
 
 $(App_Name): App/Enclave_u.o $(App_Cpp_Objects)
-	@$(CXX) $^ -g -o $@ $(App_Link_Flags)
+	@$(CXX) $^ -o $@ $(App_Link_Flags)
 	@echo "LINK =>  $@"
+
 
 ######## Enclave Objects ########
 
@@ -171,11 +210,37 @@ Enclave/Enclave_t.o: Enclave/Enclave_t.c
 	@$(CC) $(Enclave_C_Flags) -c $< -o $@
 	@echo "CC   <=  $<"
 
-Enclave/%.o: Enclave/%.cpp
-	@$(CXX) $(Enclave_Cpp_Flags) -c $< -o $@
-	@echo "CXX  <=  $<"
+#Enclave/%.o: Enclave/%.c
+#	@$(CC) $(Enclave_C_Flags) -c $< -o $@
+#	@echo "CC  <=  $<"
 
-$(Enclave_Name): Enclave/Enclave_t.o $(Enclave_Cpp_Objects)
+Enclave/tsgx_init.o: Enclave/tsgx_init.c
+	@$(CC) $(Enclave_C_Flags) -c $< -o $@
+	@echo "CC  <=  $<"
+
+Enclave/Enclave_t.bc: Enclave/Enclave_t.c
+	@$(CLANG) $(Enclave_Clang_Flags) -c $< -o $@
+	@$(OPT) -load $(FUN_NAME_PASS_SO) -function-name $@ -o /dev/null
+	@echo "GEN  <=  $@"
+
+Enclave/Enclave.bc: Enclave/Enclave.c Enclave/Enclave_t.bc tsgx_eocalls_log.txt
+	@$(CLANG) $(Enclave_Clang_Flags) -c $< -o $@
+	@$(OPT) -load $(FUN_WRAP_PASS_SO) -function-wrapper $@ -o $@
+	@echo "GEN  <=  $@"
+
+Enclave/Enclave.s: Enclave/Enclave.bc tsgx_functions_log.txt
+	@$(LLC) -tsgx -relocation-model=pic -o $@ $<
+	@echo "LLC  <=  $<"
+
+Enclave/%.o: Enclave/%.s
+	@$(CC) $(Enclave_C_Flags) -c $< -o $@
+	@echo "CC  <=  $<"
+
+#Enclave/%.o: Enclave/%.cpp
+#	@$(CXX) $(Enclave_Cpp_Flags) -c $< -o $@
+#	@echo "CXX  <=  $<"
+
+$(Enclave_Name): Enclave/Enclave_t.o $(Enclave_C_Objects) Enclave/springboard.o Enclave/tsgx_init.o
 	@$(CXX) $^ -o $@ $(Enclave_Link_Flags)
 	@echo "LINK =>  $@"
 
@@ -186,4 +251,4 @@ $(Signed_Enclave_Name): $(Enclave_Name)
 .PHONY: clean
 
 clean:
-	@rm -f $(App_Name) $(Enclave_Name) $(Signed_Enclave_Name) $(App_Cpp_Objects) App/Enclave_u.* $(Enclave_Cpp_Objects) Enclave/Enclave_t.*
+	@rm -f $(App_Name) $(Enclave_Name) $(Signed_Enclave_Name) $(App_Cpp_Objects) App/Enclave_u.* $(Enclave_C_Objects) Enclave/Enclave_t.* Enclave/*.bc Enclave/Enclave.s Enclave/*.o springboard_log.txt tsgx*.txt

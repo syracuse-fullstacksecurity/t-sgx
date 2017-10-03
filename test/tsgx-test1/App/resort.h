@@ -18,7 +18,8 @@ int bar_print(const char *fmt, ...)
 int resort(char* list, int* order, int size){
         
         char newlist[size];
-        int index = 0;		
+        int index = 0;	
+	
         for (int i = 0; i < size; i++)
            {     
                 index = order[i];

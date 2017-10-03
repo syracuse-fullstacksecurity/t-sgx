@@ -1,8 +1,8 @@
 ------------------------
-tsgx-test1
+tsgx-test
 ------------------------
 This is a simple example to demonstrate how to
-compile a sgx program and run sort function with t-sgx.
+compile a sgx program with t-sgx.
 
 ------------------------------------
 How to Build/Execute
