@@ -41,28 +41,102 @@
 #include "sgx_urts.h"
 #include "App.h"
 #include "Enclave_u.h"
+#include <time.h>
+#include <sys/time.h>
 #include "resort.h"
-
+#define SIZE 100
 /* Global EID shared by multiple threads */
 sgx_enclave_id_t global_eid = 0;
 
+void ocall_getTime(double ret[2]){
+    struct timeval stamp;
+    gettimeofday(&stamp,NULL);
+    ret[0] = stamp.tv_sec;
+    ret[1] = stamp.tv_usec;
+}
+
+/*void shuffle(int* order, long len)  
+{  
+    int index;  
+    int value;  
+    int median;  
+      
+    if(NULL == order || 0 == len)  
+        return ;  
+    srand((int)time(0));
+    
+   for(index = 0; index < len; index ++){  
+        value = index + rand() % (len - index);  
+          
+        median = order[index];  
+        order[index] = order[value];  
+        order[value] = median;  
+     }  
+} */
+void print_arr(char arr[], int brr[], int size){
+
+        if(NULL == arr || NULL == brr || size == 0)
+           return;
+
+        for(int i=0; i < size; i++)
+          printf("index:%d, value:%c, order:%d\n",i,arr[i],brr[i]);
+
+}
+void shuffle(int *array, int n) {
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    int usec = tv.tv_usec;
+    srand48(usec);
+
+
+    if (n > 1) {
+        int i;
+        for (i = n - 1; i > 0; i--) {
+            int j = (unsigned int) (drand48()*(i+1));
+            int t = array[j];
+            array[j] = array[i];
+            array[i] = t;
+        }
+    }
+} 
+
+void  get_rand_char(char* list, long len){
+      
+    if(NULL == list || 0 == len)
+        return ;
+    srand((int)time(0));
+
+    for(long i=0; i<len; i++){
+        list[i] = 'a' + ( 0+ (int)(26.0 *rand()/(RAND_MAX + 1.0)));
+   }
+
+}
+
 int task(){
 
-    int length = 0;
-    printf(" Enter the Length of letters: \n");
-    scanf("%d",&length);
+    long len = 0;
+    printf(" Enter the Length of list: \n");
+    scanf("%ld",&len);
     
-    char* list = new char[length];
-    int* order = new int[length];
-    printf(" Enter %d letters: \n", length);
-    for(int i=0; i<length; i++){
+    char* list = new char[len];
+    int* order = new int[len];
+    printf("Generating %ld Letters...\n",len);
+    get_rand_char(list,len);
+   
+    printf("Generating %ld Numbers...\n",len);
+    for(int i=0;i<len;i++)
+    {
+      order[i]=i;      
+    } 
+   /*  printf(" Enter %d letters: \n", len);
+    for(int i=0; i<len; i++){
         scanf("%s",&list[i]);
     }
    
     printf(" Enter the order of every letter: \n");
-    for(int i=0; i<length; i++){
+    for(int i=0; i<len; i++){
         scanf("%d",&order[i]);
-    }
+    }*/
    
     sgx_status_t ret = SGX_ERROR_UNEXPECTED;
     int retval;
@@ -70,14 +144,20 @@ int task(){
     assert(list != NULL);
     assert(order != NULL);
 
-    printf("\n Task 1: Resort letters outside enclave:\n");
-    resort(list,order,length);
+    printf("\nMode 1: Resort letters outside enclave:\n");
+    shuffle(order,len);
+    print_arr(list,order,len);
+    resort(list,order,len);
 
-    printf("\n Task 2: Resort letters inside enclave:\n");
-    ret = ecall_resort(global_eid, &retval,list,order,length);
+    printf("\nMode 2: Resort letters inside enclave:\n");
+    shuffle(order,len);
+    print_arr(list,order,len);
+    ret = ecall_resort(global_eid, &retval,list,order,len);
 
-    printf("\n Task 3 [Bonus]: Resort letters inside enclave (with array also inside enclave!):\n");
-    ret = ecall_resort_ncp(global_eid, &retval,(long)list,(long)order,length);
+    printf("\nMode 3 [Bonus]: Resort letters inside enclave (with array also inside enclave!):\n");
+    shuffle(order,len);
+    print_arr(list,order,len);
+    ret = ecall_resort_ncp(global_eid, &retval,(long)list,(long)order,len);
 
     if(ret != SGX_SUCCESS)
         abort(); 

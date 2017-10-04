@@ -28,14 +28,6 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
-
-
-#include <stdarg.h>
-#include <stdio.h>      /* vsnprintf */
-
-#include "Enclave.h"
-#include "Enclave_t.h"  /* print_string */
-
 /*
  * printf:
  *   Invokes OCALL to display the enclave buffer to the terminal.
