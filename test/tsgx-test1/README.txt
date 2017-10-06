@@ -2,7 +2,7 @@
 tsgx-test
 ------------------------
 This is a simple example to demonstrate how to
-compile a sgx program with t-sgx.
+compile and run a sgx program with t-sgx.
 
 ------------------------------------
 How to Build/Execute

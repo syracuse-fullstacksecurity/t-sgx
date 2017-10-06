@@ -44,7 +44,6 @@
 #include <time.h>
 #include <sys/time.h>
 #include "resort.h"
-#define SIZE 100
 /* Global EID shared by multiple threads */
 sgx_enclave_id_t global_eid = 0;
 
@@ -128,16 +127,7 @@ int task(){
     {
       order[i]=i;      
     } 
-   /*  printf(" Enter %d letters: \n", len);
-    for(int i=0; i<len; i++){
-        scanf("%s",&list[i]);
-    }
-   
-    printf(" Enter the order of every letter: \n");
-    for(int i=0; i<len; i++){
-        scanf("%d",&order[i]);
-    }*/
-   
+ 
     sgx_status_t ret = SGX_ERROR_UNEXPECTED;
     int retval;
     
@@ -146,17 +136,17 @@ int task(){
 
     printf("\nMode 1: Resort letters outside enclave:\n");
     shuffle(order,len);
-    print_arr(list,order,len);
+    //print_arr(list,order,len);
     resort(list,order,len);
 
     printf("\nMode 2: Resort letters inside enclave:\n");
     shuffle(order,len);
-    print_arr(list,order,len);
+    //print_arr(list,order,len);
     ret = ecall_resort(global_eid, &retval,list,order,len);
 
     printf("\nMode 3 [Bonus]: Resort letters inside enclave (with array also inside enclave!):\n");
     shuffle(order,len);
-    print_arr(list,order,len);
+    //print_arr(list,order,len);
     ret = ecall_resort_ncp(global_eid, &retval,(long)list,(long)order,len);
 
     if(ret != SGX_SUCCESS)

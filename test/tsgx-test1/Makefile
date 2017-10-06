@@ -35,6 +35,7 @@ SGX_SDK ?= /opt/intel/sgxsdk
 SGX_MODE ?= HW
 SGX_ARCH ?= x64
 SGX_PRERELEASE ?= 1
+SGX_DEBUG ?= 0
 
 LLVM_PATH = ../../build-llvm/bin
 OPT = $(LLVM_PATH)/opt
